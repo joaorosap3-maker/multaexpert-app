@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   MoreHorizontal, 
   Car, 
@@ -14,7 +14,8 @@ import {
 import { motion } from 'motion/react';
 import { cn } from '@/src/lib/utils';
 import ProcessDetailsDrawer from '../components/modals/ProcessDetailsDrawer';
-import { useCases } from '../contexts/CaseContext';
+import { supabase } from '@/src/lib/supabaseClient';
+import { useAuth } from '@/src/context/AuthContext';
 import { 
   DragDropContext, 
   Droppable, 
@@ -148,30 +149,87 @@ function LeadCard({ lead, onClick, isGrid, innerRef, draggableProps, dragHandleP
 }
 
 export default function Pipeline() {
-  const { cases, updateCase } = useCases();
+  const { user } = useAuth();
+  const [leads, setLeads] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [viewType, setViewType] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
   const [priorityFilter, setPriorityFilter] = useState<string>('Todos');
 
+  // Carregar leads do Supabase
+  useEffect(() => {
+    const loadLeads = async () => {
+      if (!user) return;
+
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('leads')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Erro ao carregar leads:', error);
+          throw error;
+        }
+
+        console.log('Leads carregados:', data);
+        setLeads(data || []);
+      } catch (error) {
+        console.error('Erro ao buscar leads:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadLeads();
+  }, [user]);
+
   const handleLeadClick = (lead: any) => {
     setSelectedCaseId(String(lead.id));
     setIsDrawerOpen(true);
   };
 
-  const onDragEnd = (result: DropResult) => {
+  const onDragEnd = async (result: DropResult) => {
     const { destination, source, draggableId } = result;
 
     if (!destination) return;
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
 
-    // Update the case status based on column ID
-    updateCase(draggableId, { column: destination.droppableId });
+    try {
+      // Update the lead status in Supabase based on column ID
+      const { error } = await supabase
+        .from('leads')
+        .update({ 
+          status: destination.droppableId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', draggableId)
+        .eq('user_id', user?.id);
+
+      if (error) {
+        console.error('Erro ao atualizar lead:', error);
+        throw error;
+      }
+
+      // Update local state
+      setLeads(prev => prev.map(lead => 
+        lead.id === draggableId 
+          ? { ...lead, status: destination.droppableId }
+          : lead
+      ));
+
+      console.log('Lead atualizado com sucesso');
+    } catch (error) {
+      console.error('Erro ao mover lead:', error);
+    }
   };
 
-  const filteredCases = cases.filter(c => {
-    if (priorityFilter !== 'Todos' && c.priority !== priorityFilter) return false;
+  const filteredLeads = leads.filter(lead => {
+    if (priorityFilter !== 'Todos' && lead.priority !== priorityFilter) return false;
     return true;
   });
 
@@ -259,7 +317,7 @@ export default function Pipeline() {
             viewType === 'grid' ? "gap-8" : "flex-col gap-10"
           )}>
             {columns.map((column) => {
-              const columnCases = filteredCases.filter((c) => c.column === column.id);
+              const columnLeads = filteredLeads.filter((lead) => lead.status === column.id);
               
               if (viewType === 'list') {
                 return (
@@ -268,7 +326,7 @@ export default function Pipeline() {
                       <span className={cn("w-3 h-3 rounded-full", column.color)}></span>
                       <h3 className="text-xs font-black text-on-surface uppercase tracking-widest">{column.title}</h3>
                       <span className="text-[10px] text-on-surface-variant font-bold opacity-50 px-2 bg-surface-container rounded-lg border border-surface-container-highest">
-                        {columnCases.length}
+                        {columnLeads.length}
                       </span>
                     </div>
                     <Droppable droppableId={column.id} direction="horizontal">
@@ -278,7 +336,7 @@ export default function Pipeline() {
                           {...provided.droppableProps}
                           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 px-2 min-h-[50px]"
                         >
-                          {columnCases.map((lead, index) => (
+                          {columnLeads.map((lead, index) => (
                             // @ts-ignore
                             <Draggable key={String(lead.id)} draggableId={String(lead.id)} index={index}>
                               {(provided) => (
@@ -310,7 +368,7 @@ export default function Pipeline() {
                       </div>
                       <h3 className="text-[11px] font-black text-on-surface uppercase tracking-widest">{column.title}</h3>
                       <div className="bg-surface-container-highest/50 text-on-surface-variant text-[10px] px-2 py-0.5 rounded-lg font-black border border-white/5 backdrop-blur-sm">
-                        {columnCases.length}
+                        {columnLeads.length}
                       </div>
                     </div>
                   </div>
@@ -325,7 +383,7 @@ export default function Pipeline() {
                           snapshot.isDraggingOver ? "bg-primary-container/5" : ""
                         )}
                       >
-                        {columnCases.map((lead, index) => (
+                        {columnLeads.map((lead, index) => (
                           // @ts-ignore
                           <Draggable key={String(lead.id)} draggableId={String(lead.id)} index={index}>
                             {(provided) => (
@@ -342,7 +400,7 @@ export default function Pipeline() {
                         ))}
                         {provided.placeholder}
                         
-                        {column.id === 'finalized' && columnCases.length === 0 && (
+                        {column.id === 'finalized' && columnLeads.length === 0 && (
                           <div className="h-40 border-2 border-dashed border-surface-container-highest/20 rounded-2xl flex items-center justify-center p-8 opacity-10">
                             <History className="w-10 h-10 text-on-surface-variant" />
                           </div>

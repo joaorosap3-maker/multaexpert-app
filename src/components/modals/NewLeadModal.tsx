@@ -24,7 +24,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/src/lib/utils';
-import { useCases } from '@/src/contexts/CaseContext';
+import { supabase } from '@/src/lib/supabaseClient';
+import { useAuth } from '@/src/context/AuthContext';
 import { toast } from 'sonner';
 
 interface NewLeadModalProps {
@@ -33,7 +34,7 @@ interface NewLeadModalProps {
 }
 
 export default function NewLeadModal({ isOpen, onClose }: NewLeadModalProps) {
-  const { addCase } = useCases();
+  const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0); // 0: Upload, 1: AI, 2: Confirm
   const [file, setFile] = useState<File | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -186,37 +187,53 @@ export default function NewLeadModal({ isOpen, onClose }: NewLeadModalProps) {
     e.preventDefault();
     setIsSubmitting(true);
     
-    // Simulação de salvamento
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Adicionar ao estado global através do context
-    addCase({
-      name: formData.name,
-      ownerName: formData.name,
-      driverName: 'O Próprio',
-      address: 'Extraído via OCR inteligente em ' + formData.authority,
-      autoNumber: formData.autoNumber,
-      infractionDate: formData.infractionDate,
-      infractionDescription: `Infração de ${formData.infractionType} detectada via IA`,
-      legalBase: 'Artigo do CTB correspondente',
-      phone: formData.phone,
-      infractionType: formData.infractionType,
-      plate: formData.plate.toUpperCase(),
-      priority: 'Padrão',
-      time: 'Agora',
-      avatar: null,
-    });
+    try {
+      if (!user) {
+        throw new Error('Usuário não autenticado');
+      }
 
-    setIsSubmitting(false);
-    setIsSuccess(true);
-    toast.success('Lead criado com sucesso', {
-      description: `${formData.name} foi adicionado à coluna de Entrada.`,
-    });
-    
-    // Fechar automaticamente após sucesso
-    setTimeout(() => {
-      handleClose();
-    }, 2000);
+      // Inserir lead na tabela 'leads' do Supabase
+      const { data, error } = await supabase
+        .from('leads')
+        .insert({
+          name: formData.name,
+          phone: formData.phone,
+          status: 'novo', // Status inicial
+          user_id: user.id,
+          // Campos adicionais para referência
+          plate: formData.plate.toUpperCase(),
+          infraction_type: formData.infractionType,
+          auto_number: formData.autoNumber,
+          infraction_date: formData.infractionDate,
+          authority: formData.authority,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar lead:', error);
+        throw error;
+      }
+
+      console.log('Lead salvo com sucesso:', data);
+
+      setIsSubmitting(false);
+      setIsSuccess(true);
+      toast.success('Lead criado com sucesso', {
+        description: `${formData.name} foi salvo no banco de dados.`,
+      });
+      
+      // Fechar automaticamente após sucesso
+      setTimeout(() => {
+        handleClose();
+      }, 2000);
+    } catch (error) {
+      console.error('Erro ao criar lead:', error);
+      setIsSubmitting(false);
+      toast.error('Erro ao criar lead', {
+        description: 'Não foi possível salvar o lead. Tente novamente.',
+      });
+    }
   };
 
   return (
