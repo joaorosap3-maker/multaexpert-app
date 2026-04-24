@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-primary-container: var(--primary-container);
+  --color-on-primary-container: var(--on-primary-container);
+  
+  --color-secondary: var(--primary-container);
+  --color-secondary-container: var(--surface-container);
+  
+  --color-surface: var(--surface);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-highest: var(--surface-container-highest);
+  
+  --color-on-surface: var(--on-surface);
+  --color-on-surface-variant: var(--on-surface-variant);
+  
+  --color-error: #F43F5E;
+}
+
+:root {
+  --primary-container: #38BDF8;
+  --on-primary-container: #0F172A;
+  --surface: #0F172A;
+  --surface-container: #1E293B;
+  --surface-container-highest: #334155;
+  --on-surface: #F1F5F9;
+  --on-surface-variant: #94A3B8;
+}
+
+:root.light {
+  --primary-container: #0EA5E9;
+  --on-primary-container: #FFFFFF;
+  --surface: #F8FAFC;
+  --surface-container: #F1F5F9;
+  --surface-container-highest: #E2E8F0;
+  --on-surface: #0F172A;
+  --on-surface-variant: #64748B;
+}
+
+@layer base {
+  body {
+    @apply bg-surface text-on-surface font-sans transition-colors duration-300;
+  }
+}
+
+.markdown-body {
+  @apply text-sm leading-relaxed;
+}
+
+.markdown-body p {
+  @apply mb-4;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
