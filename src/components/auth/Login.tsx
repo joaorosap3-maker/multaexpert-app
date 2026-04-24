@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Lock, Mail, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -9,24 +10,34 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simular delay de rede
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    const success = login(email, password);
-    
-    if (success) {
-      toast.success('Bem-vindo ao Multa Expert!', {
-        description: 'Acesso autorizado com sucesso.'
+    try {
+      const { error } = await login(email, password);
+      
+      if (error) {
+        toast.error('Erro no login', {
+          description: error.message || 'Por favor, verifique seu e-mail e senha.'
+        });
+      } else {
+        toast.success('Bem-vindo ao Multa Expert!', {
+          description: 'Acesso autorizado com sucesso.'
+        });
+        
+        // Redirecionar para o app após login bem-sucedido
+        setTimeout(() => {
+          navigate('/app');
+        }, 1000);
+      }
+    } catch (error) {
+      toast.error('Erro inesperado', {
+        description: 'Ocorreu um erro ao tentar fazer login.'
       });
-    } else {
-      toast.error('Credenciais inválidas', {
-        description: 'Por favor, verifique seu e-mail e senha.'
-      });
+    } finally {
       setIsLoading(false);
     }
   };

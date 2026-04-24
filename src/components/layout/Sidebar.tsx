@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -11,11 +11,13 @@ import {
   Briefcase,
   User,
   BookOpen,
-  Car
+  Car,
+  Loader2
 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { motion } from 'motion/react';
+import { toast } from 'sonner';
 
 const navigation = [
   { name: 'Painel', href: '/', icon: LayoutDashboard },
@@ -27,7 +29,24 @@ const navigation = [
 ];
 
 export default function Sidebar() {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    
+    try {
+      await logout();
+      toast.success('Logout realizado', {
+        description: 'Você saiu do sistema com sucesso.'
+      });
+    } catch (error) {
+      toast.error('Erro ao sair', {
+        description: 'Ocorreu um erro ao tentar fazer logout.'
+      });
+      setIsLoggingOut(false);
+    }
+  };
 
   return (
     <aside className="fixed left-0 top-0 h-full w-[280px] border-r border-surface-container-highest bg-surface flex flex-col py-6 z-50">
@@ -78,16 +97,30 @@ export default function Sidebar() {
             <User className="w-5 h-5 text-on-surface-variant opacity-60" />
           </div>
           <div className="overflow-hidden">
-            <p className="text-xs font-bold text-on-surface truncate">Administrador</p>
-            <p className="text-[10px] text-on-surface-variant uppercase tracking-widest font-bold opacity-60">Acesso Restrito</p>
+            <p className="text-xs font-bold text-on-surface truncate">
+              {user?.email || 'Usuário'}
+            </p>
+            <p className="text-[10px] text-on-surface-variant uppercase tracking-widest font-bold opacity-60">
+              Online
+            </p>
           </div>
         </div>
         <button 
-          onClick={logout}
-          className="w-full flex items-center gap-3 px-4 py-2.5 text-on-surface-variant hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all text-sm font-bold group"
+          onClick={handleLogout}
+          disabled={isLoggingOut}
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-on-surface-variant hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all text-sm font-bold group disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <LogOut className="w-4 h-4 transition-transform group-hover:scale-110" />
-          Sair
+          {isLoggingOut ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Saindo...
+            </>
+          ) : (
+            <>
+              <LogOut className="w-4 h-4 transition-transform group-hover:scale-110" />
+              Sair
+            </>
+          )}
         </button>
       </div>
     </aside>

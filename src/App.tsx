@@ -8,10 +8,8 @@ import Services from './pages/Services';
 import Precedents from './pages/Precedents';
 import Processes from './pages/Processes';
 import NewLeadModal from './components/modals/NewLeadModal';
-import { CaseProvider } from './contexts/CaseContext';
-import { KnowledgeProvider } from './contexts/KnowledgeContext';
-import { LearningProvider } from './contexts/LearningContext';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { useAuth } from './context/AuthContext';
+import { Providers } from './providers/Providers';
 import Login from './components/auth/Login';
 import KnowledgeBase from './pages/KnowledgeBase';
 import { Toaster } from 'sonner';
@@ -55,9 +53,22 @@ function MainApp() {
 }
 
 function AuthWrapper() {
-  const { isAuthenticated } = useAuth();
+  const { user, loading } = useAuth();
 
-  if (!isAuthenticated) {
+  // Loading inicial para evitar tela piscando
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary-container/20 border-t-primary-container rounded-full animate-spin"></div>
+          <p className="text-on-surface-variant text-sm">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Se não estiver logado, mostrar página de login
+  if (!user) {
     return (
       <>
         <Login />
@@ -66,21 +77,16 @@ function AuthWrapper() {
     );
   }
 
+  // Se estiver logado, mostrar o app
   return <MainApp />;
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <CaseProvider>
-        <KnowledgeProvider>
-          <LearningProvider>
-            <BrowserRouter>
-              <AuthWrapper />
-            </BrowserRouter>
-          </LearningProvider>
-        </KnowledgeProvider>
-      </CaseProvider>
-    </AuthProvider>
+    <Providers>
+      <BrowserRouter>
+        <AuthWrapper />
+      </BrowserRouter>
+    </Providers>
   );
 }
