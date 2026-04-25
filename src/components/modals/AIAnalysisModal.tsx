@@ -39,21 +39,23 @@ export default function AIAnalysisModal({ isOpen, onClose, onApply, onSave, resu
 
   useEffect(() => {
     if (result) {
-      const initialText = `ANÁLISE INTELIGENTE - ${caseName.toUpperCase()}
-Gerada em: ${new Date().toLocaleString('pt-BR')} por ${WHITE_LABEL.COMPANY_NAME}
+      const initialText = `ANÁLISE INTELIGENTE - ${(caseName || '').toUpperCase()}
+Gerada em: ${new Date().toLocaleString('pt-BR')} por ${(WHITE_LABEL.COMPANY_NAME || '')}
 
-${result.summary}
+${result?.summary || ''}
 
 ---
-ESTIMATIVA DE ÉXITO FINAL: ${result.score}%
+ESTIMATIVA DE ÉXITO FINAL: ${result?.score || 0}%
 Análise baseada em parâmetros estatísticos e jurisprudenciais do órgão autuador.
-Gerado por ${WHITE_LABEL.COMPANY_NAME} • ${WHITE_LABEL.WEBSITE}
+Gerado por ${(WHITE_LABEL.COMPANY_NAME || '')} • ${(WHITE_LABEL.WEBSITE || '')}
 `;
       setEditableContent(initialText);
     }
   }, [result, caseName]);
 
-  if (!result) return null;
+  if (!result) {
+  return <div className="p-4 text-sm text-gray-400">Sem análise disponível</div>;
+}
 
   const handleSave = () => {
     localStorage.setItem(`analysis_${caseName}`, editableContent);
@@ -124,13 +126,13 @@ Gerado por ${WHITE_LABEL.COMPANY_NAME} • ${WHITE_LABEL.WEBSITE}
                   <div className="absolute top-0 right-0 w-24 h-24 bg-green-400 opacity-[0.03] rounded-full -mr-12 -mt-12 group-hover:opacity-[0.08] transition-opacity" />
                   <Target className="w-5 h-5 text-green-400 mb-3" />
                   <p className="text-[9px] font-black text-on-surface-variant uppercase tracking-widest opacity-40">Taxa de Êxito</p>
-                  <p className="text-3xl font-black text-on-surface tracking-tighter mt-1">{result.score}%</p>
+                  <p className="text-3xl font-black text-on-surface tracking-tighter mt-1">{result?.score || 0}%</p>
                 </div>
                 <div className="bg-surface p-6 rounded-3xl border border-surface-container-highest shadow-sm relative overflow-hidden group">
                   <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-400 opacity-[0.03] rounded-full -mr-12 -mt-12 group-hover:opacity-[0.08] transition-opacity" />
                   <TrendingUp className="w-5 h-5 text-indigo-400 mb-3" />
                   <p className="text-[9px] font-black text-on-surface-variant uppercase tracking-widest opacity-40">Teses Encontradas</p>
-                  <p className="text-3xl font-black text-on-surface tracking-tighter mt-1">{result.recommendations.length}</p>
+                  <p className="text-3xl font-black text-on-surface tracking-tighter mt-1">{(result?.recommendations || []).length}</p>
                 </div>
                 <div className="bg-surface p-6 rounded-3xl border border-surface-container-highest shadow-sm relative overflow-hidden group">
                   <div className="absolute top-0 right-0 w-24 h-24 bg-amber-400 opacity-[0.03] rounded-full -mr-12 -mt-12 group-hover:opacity-[0.08] transition-opacity" />

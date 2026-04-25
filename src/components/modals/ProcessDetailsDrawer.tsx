@@ -43,19 +43,56 @@ import { analyzeInfraction, AnalysisResult } from '@/src/services/aiAnalyseServi
 import { generateDefenseTemplate } from '@/src/services/defenseGenerator';
 import { recordOutcome } from '@/src/services/learningService';
 import { initialNulidades } from '@/src/services/nulidadeData';
+import { analyzeLead, LeadAnalysisResult, formatCurrency, getGravityColor } from '@/src/services/leadAnalysisService';
 
 interface ProcessDetailsDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  caseId: string | null;
+  lead: any | null;
+  onAnalyze?: (lead: any) => Promise<void>;
 }
 
-export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: ProcessDetailsDrawerProps) {
+export default function ProcessDetailsDrawer({ isOpen, onClose, lead, onAnalyze }: ProcessDetailsDrawerProps) {
   const { cases, updateCase, linkServiceToCase } = useCases();
   const { documents: knowledgeDocs } = useKnowledge();
   const { getRelevantLearnings } = useLearning();
   
-  const caseData = cases.find(c => c.id === caseId);
+  // Log de diagnóstico
+  console.log('Drawer render:', { lead, isOpen });
+  console.log('ANALYSIS NO MODAL:', lead?.analysis);
+  
+  const caseData = lead;
+  const leadAnalysis = lead?.analysis;
+  
+  // Fallback visual para depuração
+  if (!caseData && isOpen) {
+    console.warn('Modal aberta mas caseData é null - possível problema de sincronização');
+    return (
+      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-surface/90 backdrop-blur-md">
+        <div className="bg-surface-container rounded-[40px] shadow-[0_48px_96px_-12px_rgba(0,0,0,0.7)] border border-surface-container-highest p-8 max-w-2xl w-full">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-black text-on-surface uppercase italic tracking-tight">Erro ao Carregar Dados</h3>
+            <button 
+              onClick={onClose}
+              className="p-2 bg-surface border border-surface-container-highest rounded-xl text-on-surface-variant hover:text-on-surface transition-all"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="space-y-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <p className="text-sm text-amber-800">
+                <strong>Problema detectado:</strong> Não foi possível carregar os dados do lead.
+              </p>
+              <p className="text-xs text-amber-600 mt-2">
+                ID: {lead?.id} | Lead: {lead ? JSON.stringify(lead) : 'null'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const [obs, setObs] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -70,37 +107,50 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: Proces
   const [conclusionOutcome, setConclusionOutcome] = useState<'deferred' | 'denied'>('deferred');
   const [selectedConclusionThesis, setSelectedConclusionThesis] = useState<string>('');
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [generatedDefenseContent, setGeneratedDefenseContent] = useState('');
   const [selectedGeneration, setSelectedGeneration] = useState<GenerationEntry | null>(null);
   const [isGenModalOpen, setIsGenModalOpen] = useState(false);
   const [isResourceSelectOpen, setIsResourceSelectOpen] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (caseData) {
-      setObs(caseData.observations || '');
-    }
-  }, [caseData?.id, caseData?.observations]);
+  
+// 📝 Observações
+useEffect(() => {
+  if (lead) {
+    setObs(lead.observations || '');
+  }
+}, [lead?.observations]);
 
-  useEffect(() => {
-    if (caseData?.appliedThesisId) {
-      setSelectedConclusionThesis(caseData.appliedThesisId);
-    }
-  }, [caseData?.id, caseData?.appliedThesisId]);
+// 📌 Tese aplicada
+useEffect(() => {
+  if (lead?.appliedThesisId) {
+    setSelectedConclusionThesis(lead.appliedThesisId);
+  }
+}, [lead?.appliedThesisId]);
 
-  if (!caseData && isOpen) return null;
+// 🧠 Debug da análise
+useEffect(() => {
+  console.log('RENDER COM ANALYSIS:', lead?.analysis);
+}, [lead?.analysis]);
+
+// 🔄 Monitorar análise
+useEffect(() => {
+  console.log('🔄 Lead.analysis mudou:', lead?.analysis);
+}, [lead?.analysis]);
+
+if (!lead && isOpen) return null;
 
   const handleSaveObs = async () => {
-    if (!caseId) return;
+    if (!lead?.id) return;
     setIsSaving(true);
     await new Promise(resolve => setTimeout(resolve, 800));
-    updateCase(caseId, { observations: obs });
+    updateCase(lead.id, { observations: obs });
     setIsSaving(false);
   };
 
   const addGeneration = (type: string, content: string, summary?: string) => {
-    if (!caseId || !caseData) return;
+    if (!lead?.id || !caseData) return;
     const date = new Date().toLocaleString('pt-BR');
     const newGeneration: GenerationEntry = {
       id: Math.random().toString(36).substr(2, 9),
@@ -117,14 +167,14 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: Proces
       description: `O conteúdo gerado (${type}) foi revisado e salvo no histórico do cliente.`
     };
 
-    updateCase(caseId, {
+    updateCase(lead.id, {
       generations: [newGeneration, ...(caseData.generations || [])],
       history: [newHistoryItem, ...(caseData.history || [])]
     });
   };
 
   const wrapAction = async (id: string, actionName: string, update: any, delay: number = 1000, customDesc?: string) => {
-    if (!caseId || !caseData) return;
+    if (!lead?.id || !caseData) return;
     setLoadingAction(id);
     
     await new Promise(resolve => setTimeout(resolve, delay));
@@ -139,9 +189,9 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: Proces
     const updatedHistory = [newHistoryItem, ...(caseData.history || [])];
 
     if (update) {
-      updateCase(caseId, { ...update, history: updatedHistory });
+      updateCase(lead.id, { ...update, history: updatedHistory });
     } else {
-      updateCase(caseId, { history: updatedHistory });
+      updateCase(lead.id, { history: updatedHistory });
     }
     
     setLoadingAction(null);
@@ -150,14 +200,66 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: Proces
   };
 
   const actions = [
-    { id: 'ai', icon: Brain, label: 'Analisar com IA', color: 'bg-indigo-500', desc: 'Cruzamento de teses e julgados' },
-    { id: 'contract', icon: FileText, label: 'Gerar Contrato', color: 'bg-blue-500', desc: 'Minuta personalizada para o cliente' },
+    { id: 'ai', icon: Brain, label: 'Analisar com IA', color: 'bg-blue-500', desc: 'Análise inteligente da multa' },
+    { id: 'contract', icon: FileText, label: 'Gerar Contrato', color: 'bg-purple-500', desc: 'Contrato de honorários' },
     { id: 'payment', icon: DollarSign, label: 'Gerar Pagamento', color: 'bg-amber-500', desc: 'Cobrança PIX/Cartão/Boleto' },
     { id: 'terms', icon: ShieldCheck, label: 'Gerar Procuração', color: 'bg-emerald-500', desc: 'Representação legal pronta' },
     { id: 'resource', icon: Gavel, label: 'Gerar Recurso', color: 'bg-rose-500', desc: 'Petição automática' },
   ];
 
-  const handleAction = async (id: string) => {
+  
+  const handleAnalyzeLead = async (leadToAnalyze: any) => {
+  if (!leadToAnalyze) return;
+
+  try {
+    console.log('🚀 ProcessDetailsDrawer: Iniciando análise:', leadToAnalyze);
+
+    const result = await analyzeLead(leadToAnalyze);
+
+    console.log('✅ ProcessDetailsDrawer: Resultado final:', result);
+
+    // Criar análise no formato esperado pelo AIAnalysisModal
+    const analysisResult = {
+      score: 85, // Mock score
+      summary: result.resumo,
+      recommendations: [
+        {
+          id: '1',
+          tese: result.recomendacao,
+          probability: 85,
+          description: result.resumo
+        }
+      ]
+    };
+
+    // Abrir modal de análise
+    setIsAnalysisModalOpen(true);
+    setAnalysisResult(analysisResult);
+
+    // Adicionar ao histórico
+    const newHistoryItem: HistoryItem = {
+      id: Math.random().toString(36).substr(2, 9),
+      date: new Date().toLocaleString('pt-BR'),
+      action: 'Análise de IA concluída',
+      description: `Análise inteligente gerada com sucesso.`
+    };
+
+    updateCase(leadToAnalyze.id, { 
+      history: [newHistoryItem, ...(caseData?.history || [])]
+    });
+
+    setLoadingAction(null);
+    setSuccessAction('ai');
+    setTimeout(() => setSuccessAction(null), 2000);
+
+  } catch (error) {
+    console.error('❌ ProcessDetailsDrawer: Erro na análise:', error);
+    toast.error('Erro ao analisar a multa. Tente novamente.');
+    setLoadingAction(null);
+  }
+};
+
+const handleAction = async (id: string) => {
     switch(id) {
       case 'ai': 
         if (!caseData) return;
@@ -177,7 +279,7 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: Proces
             learnings: learnings
           });
           
-          setAnalysisResult(result);
+          // Análise será adicionada ao lead via setSelectedLead no Pipeline
           
           const newHistoryItem: HistoryItem = {
             id: Math.random().toString(36).substr(2, 9),
@@ -186,7 +288,7 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: Proces
             description: `A IA identificou ${result.recommendations.length} teses com até ${result.score}% de probabilidade de deferimento.`
           };
 
-          updateCase(caseId!, { 
+          updateCase(lead.id, { 
             status: 'Em Análise', 
             column: 'analysis',
             history: [newHistoryItem, ...(caseData.history || [])]
@@ -221,14 +323,14 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: Proces
   };
 
   const handleCreateResource = (resourceType: string) => {
-    if (!caseId || !caseData) return;
+    if (!lead?.id || !caseData) return;
     setIsResourceSelectOpen(false);
     setCurrentDocType('Recurso');
     setIsDocEditorOpen(true);
   };
 
   const handleSaveDocument = (docName: string, content: string) => {
-    if (!caseId || !caseData) return;
+    if (!lead?.id || !caseData) return;
 
     const newDoc: CaseDocument = {
       id: Math.random().toString(36).substr(2, 9),
@@ -246,7 +348,7 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: Proces
       description: `${currentDocType} gerado e editado manualmente pelo consultor.`
     };
 
-    updateCase(caseId, {
+    updateCase(lead.id, {
       documents: [newDoc, ...(caseData.documents || [])],
       history: [newHistoryItem, ...(caseData.history || [])],
       column: 'awaiting_client',
@@ -256,20 +358,20 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: Proces
   };
 
   const handleApplyDefense = () => {
-    if (!caseData || !analysisResult || analysisResult.recommendations.length === 0) return;
+    if (!caseData || !caseData.analysis) return;
     
-    // Use the top recommendation as the primary thesis for learning
-    const primaryThesis = analysisResult.recommendations[0];
+    // Use top recommendation as primary thesis for learning
+    const primaryThesis = caseData.analysis.recommendations?.[0];
     
     // Generate template using results
-    const defenseHtml = generateDefenseTemplate(caseData, analysisResult.recommendations);
+    const defenseHtml = generateDefenseTemplate(caseData, caseData.analysis.recommendations || []);
     
     setGeneratedDefenseContent(defenseHtml);
     setCurrentDocType('Defesa');
     setIsAnalysisModalOpen(false);
     
     // Store thesis in case
-    updateCase(caseId!, {
+    updateCase(lead.id, {
       appliedThesisId: primaryThesis.id,
       appliedThesisTitle: primaryThesis.tese
     });
@@ -281,7 +383,7 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: Proces
   };
 
   const handleSetOutcome = (outcome: 'deferred' | 'denied') => {
-    if (!caseId || !caseData) return;
+    if (!lead?.id || !caseData) return;
     
     // Record in learning service if a thesis was applied
     if (caseData.appliedThesisId) {
@@ -297,7 +399,7 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: Proces
       description: `Resultado final registrado pelo consultor. O sistema de IA absorveu este desfecho.`
     };
 
-    updateCase(caseId, {
+    updateCase(lead.id, {
       outcome,
       status: outcome === 'deferred' ? 'Finalizado (Vença)' : 'Finalizado (Derrota)',
       column: 'done',
@@ -311,7 +413,7 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: Proces
   };
 
   const handleCreatePayment = (data: { value: number; description: string; method: string }) => {
-    if (!caseId || !caseData) return;
+    if (!lead?.id || !caseData) return;
 
     const newBilling: Billing = {
       id: `BILL-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -322,7 +424,7 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: Proces
       status: 'Pendente'
     };
 
-    updateCase(caseId, {
+    updateCase(lead.id, {
       billings: [...(caseData.billings || []), newBilling],
     });
 
@@ -336,7 +438,7 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: Proces
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files?.[0] || !caseId || !caseData) return;
+    if (!e.target.files?.[0] || !lead?.id || !caseData) return;
     
     const file = e.target.files[0];
     setIsUploading(true);
@@ -354,7 +456,7 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: Proces
     };
     
     const updatedDocs = [newDoc, ...(caseData.documents || [])];
-    updateCase(caseId, { documents: updatedDocs });
+    updateCase(lead.id, { documents: updatedDocs });
     
     toast.success('Documento enviado', {
       description: `O arquivo ${file.name} foi anexado ao processo.`,
@@ -364,9 +466,9 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, caseId }: Proces
   };
 
   const handleDeleteDoc = (docId: string) => {
-    if (!caseId || !caseData) return;
+    if (!lead?.id || !caseData) return;
     const updatedDocs = (caseData.documents || []).filter(d => d.id !== docId);
-    updateCase(caseId, { documents: updatedDocs });
+    updateCase(lead.id, { documents: updatedDocs });
     toast.error('Documento excluído');
   };
 
@@ -545,8 +647,9 @@ Link: https://${WHITE_LABEL.WEBSITE.toLowerCase()}/docs/${doc.id}.pdf`;
                     </div>
                   </div>
 
-                  {/* AI Learning Feedback Section */}
-                  {caseData.appliedThesisId && !caseData.outcome && (
+                  
+                  {/* Aprendizado IA Section */}
+                  {caseData.learning && (
                     <motion.div 
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -623,14 +726,16 @@ Link: https://${WHITE_LABEL.WEBSITE.toLowerCase()}/docs/${doc.id}.pdf`;
                     {actions.map((action) => (
                       <button 
                         key={action.id}
-                        onClick={() => handleAction(action.id)}
-                        disabled={loadingAction !== null || successAction !== null}
-                        className={cn(
-                          "group w-full flex items-center gap-5 p-6 bg-surface/60 border border-surface-container-highest rounded-[32px] hover:bg-surface-container-highest/60 hover:shadow-2xl hover:shadow-primary-container/[0.05] hover:-translate-y-1 transition-all text-left active:scale-[0.98] shadow-sm relative overflow-hidden",
-                          loadingAction === action.id && "ring-2 ring-primary-container shadow-inner bg-surface-container-highest",
-                          successAction === action.id && "bg-green-400/10 border-green-400/30",
-                          (loadingAction !== null && loadingAction !== action.id) || (successAction !== null && successAction !== action.id) ? "opacity-40 grayscale-[0.5]" : ""
-                        )}
+                       onClick={() => {
+  console.log('🔥 clique:', action.id);
+
+  if (action.id === 'ai') {
+    console.log('🤖 chamando IA com lead:', lead);
+    handleAnalyzeLead(lead); // 👈 CORRETO
+  } else {
+    handleAction(action.id);
+  }
+}}
                       >
                         <div className={cn(
                           "w-16 h-16 rounded-[24px] flex items-center justify-center text-white shadow-xl transition-all shrink-0 z-10",
@@ -1012,9 +1117,9 @@ Link: https://${WHITE_LABEL.WEBSITE.toLowerCase()}/docs/${doc.id}.pdf`;
                      </button>
                      <button 
                         onClick={() => {
-                          if (caseId) {
+                          if (lead?.id) {
                             // 1. Update Case
-                            updateCase(caseId, { 
+                            updateCase(lead.id, { 
                               status: 'Concluído', 
                               completion: 100,
                               outcome: conclusionOutcome,

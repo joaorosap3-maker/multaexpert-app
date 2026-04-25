@@ -38,6 +38,8 @@ export default function NewLeadModal({ isOpen, onClose }: NewLeadModalProps) {
   const [currentStep, setCurrentStep] = useState(0); // 0: Upload, 1: AI, 2: Confirm
   const [file, setFile] = useState<File | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [nome, setNome] = useState('');
+  const [telefone, setTelefone] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -155,30 +157,12 @@ export default function NewLeadModal({ isOpen, onClose }: NewLeadModalProps) {
   const startExtraction = async () => {
     setCurrentStep(1);
     setIsExtracting(true);
-    // Simulação de extração IA
-    await new Promise(resolve => setTimeout(resolve, 3000));
     
-    setFormData({
-      name: 'MARCOS RODRIGO DE ALMEIDA',
-      phone: '(11) 98877-6655',
-      plate: 'RGX-9C44',
-      infractionType: 'Excesso de velocidade',
-      autoNumber: 'Y39821-X',
-      infractionDate: '22/04/2026',
-      authority: 'DETRAN/SP',
-    });
-
-    // Simular diferentes níveis de confiança
-    setFieldConfidence({
-      name: 'high',
-      phone: 'high',
-      plate: 'high',
-      infractionType: 'high',
-      autoNumber: 'medium',
-      infractionDate: 'low',
-      authority: 'medium'
-    });
+    // Pular extração IA e ir direto para o formulário manual
+    await new Promise(resolve => setTimeout(resolve, 500));
     
+    // Limpar campos para preenchimento manual
+    setFieldConfidence({});
     setIsExtracting(false);
     setCurrentStep(2);
   };
@@ -188,31 +172,54 @@ export default function NewLeadModal({ isOpen, onClose }: NewLeadModalProps) {
     setIsSubmitting(true);
     
     try {
-      if (!user) {
-        throw new Error('Usuário não autenticado');
+      // Obter usuário autenticado diretamente do Supabase
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError) {
+        console.error('Erro na autenticação:', authError);
+        throw new Error('Falha na autenticação: ' + authError.message);
       }
+
+      if (!authUser) {
+        console.error('Usuário não encontrado na autenticação');
+        throw new Error('Usuário não autenticado ou sessão expirada');
+      }
+
+      // Log para debug
+      console.log('DEBUG - Dados do lead:', {
+        nome: nome,
+        telefone: telefone,
+        user_id: authUser.id,
+        user_email: authUser.email
+      });
+
+      console.log('Dados que serão enviados ao Supabase:', {
+        name: nome,
+        phone: telefone,
+        status: 'novo',
+        user_id: authUser.id
+      });
 
       // Inserir lead na tabela 'leads' do Supabase
       const { data, error } = await supabase
         .from('leads')
         .insert({
-          name: formData.name,
-          phone: formData.phone,
+          name: nome,
+          phone: telefone,
           status: 'novo', // Status inicial
-          user_id: user.id,
-          // Campos adicionais para referência
-          plate: formData.plate.toUpperCase(),
-          infraction_type: formData.infractionType,
-          auto_number: formData.autoNumber,
-          infraction_date: formData.infractionDate,
-          authority: formData.authority,
+          user_id: authUser.id, // Usar authUser.id em vez de user.id
         })
         .select()
         .single();
 
       if (error) {
-        console.error('Erro ao salvar lead:', error);
-        throw error;
+        console.error('ERRO DETALHADO DO SUPABASE:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw new Error('Erro ao salvar lead: ' + error.message);
       }
 
       console.log('Lead salvo com sucesso:', data);
@@ -519,7 +526,16 @@ export default function NewLeadModal({ isOpen, onClose }: NewLeadModalProps) {
                                     value={value}
                                     placeholder={placeholder}
                                     onChange={(e) => {
-                                      setFormData({ ...formData, [field]: e.target.value });
+                                      const value = e.target.value;
+                                      
+                                      // Atualizar estados separados para nome e telefone
+                                      if (field === 'name') {
+                                        setNome(value);
+                                      } else if (field === 'phone') {
+                                        setTelefone(value);
+                                      }
+                                      
+                                      setFormData({ ...formData, [field]: value });
                                       // Ao editar manualmente, assume-se confiança alta
                                       setFieldConfidence({ ...fieldConfidence, [field]: 'high' });
                                     }}

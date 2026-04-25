@@ -9,7 +9,8 @@ import {
   Filter,
   LayoutGrid,
   List as ListIcon,
-  DollarSign
+  DollarSign,
+  X
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '@/src/lib/utils';
@@ -22,13 +23,16 @@ import {
   Draggable,
   DropResult 
 } from '@hello-pangea/dnd';
+import { analyzeLead } from '@/src/services/leadAnalysisService';
+import { toast } from 'sonner';
+import { Brain, Loader2 } from 'lucide-react';
 
 const columns = [
-  { id: 'start', title: 'Entrada', color: 'bg-slate-500' },
-  { id: 'analysis', title: 'Em Análise', color: 'bg-blue-400' },
-  { id: 'proposal', title: 'Proposta Enviada', color: 'bg-indigo-400' },
-  { id: 'awaiting_client', title: 'Aguardando Cliente', color: 'bg-amber-400' },
-  { id: 'finalized', title: 'Concluído', color: 'bg-emerald-400' },
+  { id: 'novo', title: 'Entrada', color: 'bg-slate-500' },
+  { id: 'em_andamento', title: 'Em Análise', color: 'bg-blue-400' },
+  { id: 'proposta_enviada', title: 'Proposta Enviada', color: 'bg-indigo-400' },
+  { id: 'aguardando_cliente', title: 'Aguardando Cliente', color: 'bg-amber-400' },
+  { id: 'concluido', title: 'Concluído', color: 'bg-emerald-400' },
 ];
 
 interface LeadCardProps {
@@ -38,9 +42,11 @@ interface LeadCardProps {
   innerRef?: any;
   draggableProps?: any;
   dragHandleProps?: any;
+  onAnalyze?: (lead: any) => void;
+  isAnalyzing?: boolean;
 }
 
-function LeadCard({ lead, onClick, isGrid, innerRef, draggableProps, dragHandleProps }: LeadCardProps) {
+function LeadCard({ lead, onClick, isGrid, innerRef, draggableProps, dragHandleProps, onAnalyze, isAnalyzing }: LeadCardProps) {
   const priorityColors: Record<string, string> = {
     'Urgente': 'bg-rose-500/10 text-rose-500 border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.1)]',
     'Crítica': 'bg-red-500/10 text-red-500 border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.1)]',
@@ -50,11 +56,11 @@ function LeadCard({ lead, onClick, isGrid, innerRef, draggableProps, dragHandleP
   };
 
   const statusBorderColors: Record<string, string> = {
-    'start': 'border-l-slate-400',
-    'analysis': 'border-l-blue-400',
-    'proposal': 'border-l-indigo-400',
-    'awaiting_client': 'border-l-amber-400',
-    'finalized': 'border-l-emerald-400',
+    'novo': 'border-l-slate-400',
+    'em_andamento': 'border-l-blue-400',
+    'proposta_enviada': 'border-l-indigo-400',
+    'aguardando_cliente': 'border-l-amber-400',
+    'concluido': 'border-l-emerald-400',
   };
 
   return (
@@ -68,7 +74,7 @@ function LeadCard({ lead, onClick, isGrid, innerRef, draggableProps, dragHandleP
       className={cn(
         "bg-surface-container border-l-[6px] rounded-[28px] shadow-xl hover:shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] transition-all duration-300 cursor-pointer group relative overflow-hidden",
         isGrid ? "p-5" : "p-4 flex items-center gap-8 w-full",
-        statusBorderColors[lead.column] || 'border-l-primary-container',
+        statusBorderColors[lead.status] || 'border-l-primary-container',
         "border-t border-r border-b border-surface-container-highest"
       )}
     >
@@ -136,11 +142,39 @@ function LeadCard({ lead, onClick, isGrid, innerRef, draggableProps, dragHandleP
             <span className="text-[10px] font-bold text-on-surface/80 font-mono italic">#{lead.autoNumber}</span>
           </div>
           
-          <div className="flex items-center gap-1.5">
-            <Clock className="w-3 h-3 text-on-surface-variant opacity-30" />
-            <span className="text-[9px] text-on-surface-variant font-black uppercase tracking-widest opacity-40">
-              {lead.time || 'Agora'}
-            </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAnalyze?.(lead);
+              }}
+              disabled={isAnalyzing}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest border transition-all",
+                "bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500/20 hover:border-green-500/30",
+                "active:scale-95 shadow-sm hover:shadow-md",
+                isAnalyzing && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              {isAnalyzing ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>Analisando...</span>
+                </>
+              ) : (
+                <>
+                  <Brain className="w-3 h-3" />
+                  <span>Analisar IA</span>
+                </>
+              )}
+            </button>
+            
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-3 h-3 text-on-surface-variant opacity-30" />
+              <span className="text-[9px] text-on-surface-variant font-black uppercase tracking-widest opacity-40">
+                {lead.time || 'Agora'}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -152,8 +186,9 @@ export default function Pipeline() {
   const { user } = useAuth();
   const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<any | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<any | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [viewType, setViewType] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
   const [priorityFilter, setPriorityFilter] = useState<string>('Todos');
@@ -189,38 +224,71 @@ export default function Pipeline() {
   }, [user]);
 
   const handleLeadClick = (lead: any) => {
-    setSelectedCaseId(String(lead.id));
-    setIsDrawerOpen(true);
+    console.log('Clique no card detectado:', lead);
+    setSelectedLead(lead);
   };
 
+  const updateSelectedLead = async (updatedLead: any) => {
+    console.log('🔄 Pipeline: Atualizando selectedLead com análise:', updatedLead);
+    setSelectedLead(prev => ({
+      ...prev,
+      analysis: updatedLead.analysis
+    }));
+  };
+
+  
   const onDragEnd = async (result: DropResult) => {
+    console.log('onDragEnd chamado:', result);
     const { destination, source, draggableId } = result;
 
-    if (!destination) return;
-    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
+    if (!destination) {
+      console.log('Sem destino, cancelando drag');
+      return;
+    }
+    if (destination.droppableId === source.droppableId && destination.index === source.index) {
+      console.log('Mesma posição, cancelando drag');
+      return;
+    }
 
     try {
-      // Update the lead status in Supabase based on column ID
-      const { error } = await supabase
-        .from('leads')
-        .update({ 
-          status: destination.droppableId,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', draggableId)
-        .eq('user_id', user?.id);
-
-      if (error) {
-        console.error('Erro ao atualizar lead:', error);
-        throw error;
+      const novoStatus = destination.droppableId;
+      
+      // Validar que novoStatus é uma string válida
+      if (!novoStatus || typeof novoStatus !== 'string') {
+        console.error('Status inválido:', novoStatus);
+        return;
       }
+      
+      // Log para debug
+      console.log('Atualizando:', { leadId: draggableId, novoStatus });
+
+      // Update lead status in Supabase based on column ID
+      const { error } = await supabase
+  .from('leads')
+  .update({ 
+    status: novoStatus
+  })
+  .eq('id', draggableId)
+  .eq('user_id', user.id);
+
+if (error) {
+  console.error('❌ ERRO REAL DO SUPABASE:', {
+    message: error.message,
+    details: error.details,
+    hint: error.hint,
+    code: error.code
+  });
+  return;
+}
 
       // Update local state
-      setLeads(prev => prev.map(lead => 
-        lead.id === draggableId 
-          ? { ...lead, status: destination.droppableId }
-          : lead
-      ));
+      setLeads(prev => 
+        prev.map((lead) =>
+          String(lead.id) === draggableId
+            ? { ...lead, status: novoStatus }
+            : lead
+        )
+      );
 
       console.log('Lead atualizado com sucesso');
     } catch (error) {
@@ -228,10 +296,17 @@ export default function Pipeline() {
     }
   };
 
+  // Debug dos leads carregados
+  console.log('Leads no pipeline:', leads);
+  console.log('Status dos leads:', leads.map(l => ({ id: l.id, name: l.name, status: l.status })));
+  console.log('Total de leads:', leads.length);
+
   const filteredLeads = leads.filter(lead => {
     if (priorityFilter !== 'Todos' && lead.priority !== priorityFilter) return false;
     return true;
   });
+
+  console.log('Leads filtrados:', filteredLeads.length);
 
   return (
     <motion.div 
@@ -318,6 +393,7 @@ export default function Pipeline() {
           )}>
             {columns.map((column) => {
               const columnLeads = filteredLeads.filter((lead) => lead.status === column.id);
+              console.log(`Coluna ${column.id}:`, columnLeads.length, 'leads');
               
               if (viewType === 'list') {
                 return (
@@ -347,6 +423,7 @@ export default function Pipeline() {
                                   innerRef={provided.innerRef}
                                   draggableProps={provided.draggableProps}
                                   dragHandleProps={provided.dragHandleProps}
+                                                                    isAnalyzing={isAnalyzing}
                                 />
                               )}
                             </Draggable>
@@ -394,6 +471,7 @@ export default function Pipeline() {
                                 innerRef={provided.innerRef}
                                 draggableProps={provided.draggableProps}
                                 dragHandleProps={provided.dragHandleProps}
+                                                                isAnalyzing={isAnalyzing}
                               />
                             )}
                           </Draggable>
@@ -416,9 +494,10 @@ export default function Pipeline() {
       </DragDropContext>
 
       <ProcessDetailsDrawer 
-        isOpen={isDrawerOpen} 
-        onClose={() => setIsDrawerOpen(false)} 
-        caseId={selectedCaseId} 
+        isOpen={!!selectedLead} 
+        onClose={() => setSelectedLead(null)} 
+        lead={selectedLead}
+        onAnalyze={updateSelectedLead}
       />
     </motion.div>
   );
