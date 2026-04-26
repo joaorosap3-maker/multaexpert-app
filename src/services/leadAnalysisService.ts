@@ -1,4 +1,4 @@
-// Serviço de análise de leads/multas com integração real com IA
+// Serviço de análise de leads/multas com integração preparada para IA real
 
 export interface LeadAnalysisResult {
   resumo: string;
@@ -10,72 +10,50 @@ export interface LeadAnalysisResult {
 
 export async function analyzeLead(lead: any): Promise<LeadAnalysisResult> {
   try {
-    // Tentar análise com IA real primeiro
+    // Tentar análise com IA real
     const result = await analyzeLeadWithAI(lead);
     return result;
   } catch (error) {
-    console.warn('Análise com IA falhou, usando fallback:', error);
-    
-    // Fallback para análise mock em caso de erro
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Delay menor no fallback
-    return generateMockAnalysis(lead);
+    console.warn('⚠️ Análise com IA falhou:', error);
+
+    // Fallback seguro (SEM dados fake)
+    return {
+      resumo: "Não foi possível analisar automaticamente esta multa.",
+      gravidade: "Indefinida",
+      pontos: 0,
+      valor: 0,
+      recomendacao: "Revisar manualmente ou tentar novamente."
+    };
   }
 }
 
 async function analyzeLeadWithAI(lead: any): Promise<LeadAnalysisResult> {
-  console.log("🤖 Mock IA executado:", lead);
+  // ⚠️ AQUI você vai integrar com IA real (OpenAI, API própria, etc)
 
-  // Mock funcional para eliminar erro 404
-  await new Promise(resolve => setTimeout(resolve, 1500)); // Simula tempo de processamento
+  // Exemplo de estrutura para futura API:
+  /*
+  const response = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ lead })
+  });
 
-  return {
-    resumo: "Multa com boa chance de deferimento por inconsistência no auto.",
-    gravidade: "Média",
-    pontos: 4,
-    valor: 130.16,
-    recomendacao: "Entrar com recurso administrativo."
-  };
+  if (!response.ok) {
+    throw new Error('Erro na API de análise');
+  }
+
+  return await response.json();
+  */
+
+  // 🚨 TEMPORÁRIO: se não tem IA ainda, lança erro controlado
+  throw new Error("IA não configurada");
 }
 
-function generateMockAnalysis(lead: any): LeadAnalysisResult {
-  // Dados baseados em padrões comuns de multas
-  const infractions = [
-    {
-      resumo: "Infração por excesso de velocidade em via urbana",
-      gravidade: "Média",
-      pontos: 4,
-      valor: 130.16,
-      recomendacao: "Entrar com recurso baseado em falha de sinalização"
-    },
-    {
-      resumo: "Estacionamento em local proibido",
-      gravidade: "Leve",
-      pontos: 3,
-      valor: 88.38,
-      recomendacao: "Verificar se havia sinalização adequada no local"
-    },
-    {
-      resumo: "Avanço de sinal vermelho",
-      gravidade: "Gravíssima",
-      pontos: 7,
-      valor: 293.47,
-      recomendacao: "Verificar se o radar estava funcionando corretamente"
-    },
-    {
-      resumo: "Transitar na contramão",
-      gravidade: "Gravíssima",
-      pontos: 5,
-      valor: 195.23,
-      recomendacao: "Analisar se havia necessidade de manobra evasiva"
-    }
-  ];
+// ❌ REMOVIDO: generateMockAnalysis (não usar mais)
 
-  // Selecionar infração baseada no nome do lead (mock)
-  const index = lead.name ? lead.name.length % infractions.length : 0;
-  
-  return infractions[index];
-}
-
+// Funções utilitárias continuam OK
 export function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',

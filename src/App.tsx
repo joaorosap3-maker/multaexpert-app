@@ -18,7 +18,7 @@ function MainApp() {
   const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen bg-premium">
       <Sidebar />
       
       <div className="pl-[280px]">

@@ -1,51 +1,150 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
+/* =========================
+   THEME
+========================= */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 
   --color-primary-container: var(--primary-container);
   --color-on-primary-container: var(--on-primary-container);
-  
-  --color-secondary: var(--primary-container);
-  --color-secondary-container: var(--surface-container);
-  
+
   --color-surface: var(--surface);
   --color-surface-container: var(--surface-container);
   --color-surface-container-highest: var(--surface-container-highest);
-  
+
   --color-on-surface: var(--on-surface);
   --color-on-surface-variant: var(--on-surface-variant);
-  
+
   --color-error: #F43F5E;
 }
 
+/* =========================
+   DARK MODE
+========================= */
 :root {
   --primary-container: #38BDF8;
   --on-primary-container: #0F172A;
+
   --surface: #0F172A;
   --surface-container: #1E293B;
   --surface-container-highest: #334155;
+
   --on-surface: #F1F5F9;
   --on-surface-variant: #94A3B8;
 }
 
+/* =========================
+   LIGHT MODE
+========================= */
 :root.light {
   --primary-container: #0EA5E9;
   --on-primary-container: #FFFFFF;
+
   --surface: #F8FAFC;
   --surface-container: #F1F5F9;
   --surface-container-highest: #E2E8F0;
+
   --on-surface: #0F172A;
   --on-surface-variant: #64748B;
 }
 
+/* =========================
+   BASE
+========================= */
 @layer base {
   body {
     @apply bg-surface text-on-surface font-sans transition-colors duration-300;
   }
 }
 
+/* =========================
+   COMPONENTS
+========================= */
+@layer components {
+
+  .bg-premium {
+    background: linear-gradient(180deg, #0B1220 0%, #0F172A 100%);
+  }
+
+  .card-glass {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: 16px;
+  }
+
+  .card-glass-hover {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: 16px;
+    transition: all 0.2s ease;
+  }
+
+  .card-glass-hover:hover {
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.35);
+    transform: translateY(-2px);
+  }
+
+  .badge-glass {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.8);
+    border-radius: 9999px;
+  }
+
+} /* ← FECHAMENTO CORRETO */
+
+/* =========================
+   LIGHT MODE FIX
+========================= */
+:root.light .bg-premium {
+  background: linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%);
+}
+
+:root.light .card-glass,
+:root.light .card-glass-hover {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+:root.light .card-glass-hover:hover {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+:root.light .badge-glass {
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.7);
+}
+
+:root.light .text-white {
+  color: #0F172A !important;
+}
+
+:root.light .text-white\/60 {
+  color: #64748B !important;
+}
+
+:root.light .text-white\/40 {
+  color: #94A3B8 !important;
+}
+
+:root.light .text-emerald-400 {
+  color: #0EA5E9 !important;
+}
+
+:root.light .text-emerald-300 {
+  color: #0284C7 !important;
+}
+
+/* =========================
+   MARKDOWN
+========================= */
 .markdown-body {
   @apply text-sm leading-relaxed;
 }
@@ -54,6 +153,9 @@
   @apply mb-4;
 }
 
+/* =========================
+   ICONS
+========================= */
 .material-symbols-outlined {
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
