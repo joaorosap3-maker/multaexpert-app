@@ -20,10 +20,10 @@ import {
   MoreHorizontal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '@/src/lib/utils';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { Nulidade, initialNulidades } from '@/src/services/nulidadeData';
-import { getAdjustedProbability, getUpdatedStats } from '@/src/services/learningService';
+import { Nulidade, initialNulidades } from '@/services/nulidadeData';
+import { getAdjustedProbability, getUpdatedStats } from '@/services/learningService';
 
 export default function Precedents() {
   const [nulidadesList, setNulidadesList] = useState<Nulidade[]>(initialNulidades);

@@ -1,5 +1,5 @@
 import { Case } from '../contexts/CaseContext';
-import { AnalysisRecommendation } from './aiAnalyseService';
+import { AnalysisRecommendation } from './aiAnalysisService';
 import { WHITE_LABEL } from '../constants';
 
 /**

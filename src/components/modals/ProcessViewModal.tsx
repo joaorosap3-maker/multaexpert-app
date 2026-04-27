@@ -15,8 +15,8 @@ import {
   Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '@/src/lib/utils';
-import { useCases, Billing, HistoryItem, CaseDocument } from '@/src/contexts/CaseContext';
+import { cn } from '@/lib/utils';
+import { useCases, Billing, HistoryItem, CaseDocument } from '@/contexts/CaseContext';
 import PaymentModal from './PaymentModal';
 import DocumentEditorModal from './DocumentEditorModal';
 

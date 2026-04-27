@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/context/AuthContext';
 
 export interface HistoryItem {
   id: string;
@@ -97,7 +99,7 @@ export interface Case {
 interface CaseContextType {
   cases: Case[];
   services: Service[];
-  addCase: (newCase: Omit<Case, 'id' | 'date' | 'column' | 'status' | 'completion' | 'court'>) => void;
+  addCase: (newCase: Omit<Case, 'id' | 'date' | 'column' | 'status' | 'completion' | 'court'>) => Promise<void>;
   updateCase: (id: string, updatedCase: Partial<Case>) => void;
   deleteCase: (id: string) => void;
   addService: (newService: Omit<Service, 'id'>) => void;
@@ -290,16 +292,126 @@ const initialCases: Case[] = [
   }
 ];
 
-export function CaseProvider({ children }: { children: React.ReactNode }) {
-  const [cases, setCases] = useState<Case[]>(() => {
-    const saved = localStorage.getItem('multaexpert_cases');
-    return saved ? JSON.parse(saved) : initialCases;
-  });
+// Helper functions to convert lead data to Case format
+const getColumnFromStageId = (stageId: number): string => {
+  // Map stage_id to column names used by the UI
+  const stageMapping: { [key: number]: string } = {
+    1: 'start',
+    2: 'analysis', 
+    3: 'in_progress',
+    4: 'proposal_sent',
+    5: 'awaiting_client',
+    6: 'completed'
+  };
+  return stageMapping[stageId] || 'start';
+};
 
+const getTimeFromCreatedAt = (createdAt: string): string => {
+  const now = new Date();
+  const created = new Date(createdAt);
+  const diffInHours = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60));
+  
+  if (diffInHours < 1) return 'Agora';
+  if (diffInHours < 24) return `${diffInHours}h atrás`;
+  if (diffInHours < 48) return 'Ontem';
+  return `${Math.floor(diffInHours / 24)} dias atrás`;
+};
+
+const formatDateFromCreatedAt = (createdAt: string): string => {
+  return new Date(createdAt).toLocaleDateString('pt-BR');
+};
+
+const getStatusFromStageId = (stageId: number): string => {
+  const statusMapping: { [key: number]: string } = {
+    1: 'Entrada',
+    2: 'Em Análise',
+    3: 'Em Andamento', 
+    4: 'Proposta Enviada',
+    5: 'Aguardando Cliente',
+    6: 'Concluído'
+  };
+  return statusMapping[stageId] || 'Entrada';
+};
+
+const getCompletionFromStageId = (stageId: number): number => {
+  const completionMapping: { [key: number]: number } = {
+    1: 10,
+    2: 35,
+    3: 55,
+    4: 75,
+    5: 85,
+    6: 100
+  };
+  return completionMapping[stageId] || 10;
+};
+
+export function CaseProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const [cases, setCases] = useState<Case[]>([]);
   const [services, setServices] = useState<Service[]>(() => {
     const saved = localStorage.getItem('multaexpert_services');
     return saved ? JSON.parse(saved) : initialServices;
   });
+
+  // Fetch leads from Supabase and convert to Case format
+  useEffect(() => {
+    const fetchLeads = async () => {
+      if (!user) return;
+
+      try {
+        // Get user's company_id
+        const { data: userData } = await supabase
+          .from('users')
+          .select('company_id')
+          .eq('id', user.id)
+          .single();
+
+        const companyId = userData?.company_id;
+
+        // Fetch leads from Supabase
+        const { data: leadsData } = await supabase
+          .from('leads')
+          .select('*')
+          .eq('company_id', companyId)
+          .order('created_at', { ascending: false });
+
+        // Convert leads to Case format
+        const convertedCases: Case[] = (leadsData || []).map(lead => ({
+          id: lead.id,
+          column: lead.stage_id ? getColumnFromStageId(lead.stage_id) : 'start',
+          priority: lead.priority || 'Padrão',
+          name: lead.name || 'Nome não informado',
+          ownerName: lead.owner_name || lead.name || 'Nome não informado',
+          driverName: lead.driver_name || lead.name || 'Nome não informado',
+          address: lead.address || 'Endereço não informado',
+          autoNumber: lead.auto_number || '',
+          infractionDate: lead.infraction_date || '',
+          infractionDescription: lead.infraction_description || '',
+          legalBase: lead.legal_base || '',
+          phone: lead.phone || '',
+          plate: lead.plate || '',
+          infractionType: lead.infraction_type || '',
+          time: getTimeFromCreatedAt(lead.created_at),
+          date: formatDateFromCreatedAt(lead.created_at),
+          avatar: lead.avatar || null,
+          status: getStatusFromStageId(lead.stage_id),
+          court: lead.court || 'DETRAN',
+          completion: getCompletionFromStageId(lead.stage_id),
+          documents: lead.documents || [],
+          observations: lead.observations || '',
+          comments: lead.comments || 0
+        }));
+
+        setCases(convertedCases);
+      } catch (error) {
+        console.error('Error fetching leads:', error);
+        // Fallback to initial cases if there's an error
+        setCases(initialCases);
+      }
+    };
+
+    fetchLeads();
+  }, [user]);
 
   useEffect(() => {
     localStorage.setItem('multaexpert_cases', JSON.stringify(cases));
@@ -309,18 +421,75 @@ export function CaseProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('multaexpert_services', JSON.stringify(services));
   }, [services]);
 
-  const addCase = (newCaseData: Omit<Case, 'id' | 'date' | 'column' | 'status' | 'completion' | 'court'>) => {
-    const newIdNum = Math.floor(1000 + Math.random() * 9000);
-    const newCase: Case = {
-      ...newCaseData,
-      id: `LE-${newIdNum}`,
-      date: new Date().toLocaleDateString('pt-BR'),
-      column: 'start',
-      status: 'Análise IA Inicada',
-      completion: 15,
-      court: 'DETRAN (Triagem)',
-    };
-    setCases(prev => [newCase, ...prev]);
+  const addCase = async (newCaseData: Omit<Case, 'id' | 'date' | 'column' | 'status' | 'completion' | 'court'>) => {
+    if (!user) return;
+
+    try {
+      // Get user's company_id
+      const { data: userData } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user.id)
+        .single();
+
+      const companyId = userData?.company_id;
+
+      // Create lead in Supabase
+      const { data: newLead, error } = await supabase
+        .from('leads')
+        .insert({
+          company_id: companyId,
+          name: newCaseData.name,
+          owner_name: newCaseData.ownerName,
+          driver_name: newCaseData.driverName,
+          address: newCaseData.address,
+          auto_number: newCaseData.autoNumber,
+          infraction_date: newCaseData.infractionDate,
+          infraction_description: newCaseData.infractionDescription,
+          legal_base: newCaseData.legalBase,
+          phone: newCaseData.phone,
+          plate: newCaseData.plate,
+          infraction_type: newCaseData.infractionType,
+          priority: newCaseData.priority,
+          stage_id: 1, // Default to first stage
+          created_at: new Date().toISOString(),
+          observations: newCaseData.observations,
+          documents: newCaseData.documents || []
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Convert to Case format and add to local state
+      const newCase: Case = {
+        ...newCaseData,
+        id: newLead.id,
+        date: new Date().toLocaleDateString('pt-BR'),
+        column: 'start',
+        status: 'Entrada',
+        completion: 10,
+        court: 'DETRAN',
+        time: 'Agora'
+      };
+
+      setCases(prev => [newCase, ...prev]);
+    } catch (error) {
+      console.error('Error adding case:', error);
+      // Fallback to local only if Supabase fails
+      const newIdNum = Math.floor(1000 + Math.random() * 9000);
+      const newCase: Case = {
+        ...newCaseData,
+        id: `LE-${newIdNum}`,
+        date: new Date().toLocaleDateString('pt-BR'),
+        column: 'start',
+        status: 'Entrada',
+        completion: 10,
+        court: 'DETRAN',
+        time: 'Agora'
+      };
+      setCases(prev => [newCase, ...prev]);
+    }
   };
 
   const updateCase = (id: string, updatedCase: Partial<Case>) => {

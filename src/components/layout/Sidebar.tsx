@@ -14,7 +14,7 @@ import {
   Car,
   Loader2
 } from 'lucide-react';
-import { cn } from '@/src/lib/utils';
+import { cn } from '@/lib/utils';
 import { useAuth } from '../../context/AuthContext';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';

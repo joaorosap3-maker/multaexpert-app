@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, 
   User, 
@@ -23,10 +23,12 @@ import {
   Gavel
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '@/src/lib/utils';
-import { supabase } from '@/src/lib/supabaseClient';
-import { useAuth } from '@/src/context/AuthContext';
+import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
+import { TicketExtractorService } from '@/services/ticketExtractorService';
+import { analyzeTrafficFine } from '@/services/aiAnalysisService';
 
 interface NewLeadModalProps {
   isOpen: boolean;
@@ -38,6 +40,7 @@ export default function NewLeadModal({ isOpen, onClose }: NewLeadModalProps) {
   const [currentStep, setCurrentStep] = useState(0); // 0: Upload, 1: AI, 2: Confirm
   const [file, setFile] = useState<File | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [nome, setNome] = useState('');
   const [telefone, setTelefone] = useState('');
   const [formData, setFormData] = useState({
@@ -48,6 +51,7 @@ export default function NewLeadModal({ isOpen, onClose }: NewLeadModalProps) {
     autoNumber: '',
     infractionDate: '',
     authority: '',
+    analysis: null as any,
   });
   
   // Níveis de confiança: high (verde), medium (amarelo), low (vermelho)
@@ -58,6 +62,13 @@ export default function NewLeadModal({ isOpen, onClose }: NewLeadModalProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Debug para monitorar mudanças no formData
+  useEffect(() => {
+    console.log('=== FORMDATA ATUALIZADO ===');
+    console.log('formData:', formData);
+    console.log('fieldConfidence:', fieldConfidence);
+  }, [formData, fieldConfidence]);
 
   const getInsights = (type: string) => {
     switch (type) {
@@ -138,33 +149,145 @@ export default function NewLeadModal({ isOpen, onClose }: NewLeadModalProps) {
   ];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('handleFileChange chamado', e.target.files);
+    
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
+      console.log('Arquivo selecionado:', selectedFile.name, selectedFile.type, selectedFile.size);
+      
       setFile(selectedFile);
       
       // Criar preview se for imagem
       if (selectedFile.type.startsWith('image/')) {
         const url = URL.createObjectURL(selectedFile);
         setPreviewUrl(url);
+        console.log('Preview de imagem criado');
       } else {
         setPreviewUrl(null);
+        console.log('Arquivo PDF detectado');
       }
       
-      startExtraction();
+      startExtraction(selectedFile);
+    } else {
+      console.log('Nenhum arquivo selecionado');
     }
   };
 
-  const startExtraction = async () => {
+  const startExtraction = async (selectedFile?: File) => {
+    const fileToProcess = selectedFile || file;
+    if (!fileToProcess) {
+      console.log('Nenhum arquivo para processar');
+      return;
+    }
+    
     setCurrentStep(1);
     setIsExtracting(true);
     
-    // Pular extração IA e ir direto para o formulário manual
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Limpar campos para preenchimento manual
-    setFieldConfidence({});
-    setIsExtracting(false);
-    setCurrentStep(2);
+    try {
+      let extractedData;
+      
+      // Extrair dados baseado no tipo de arquivo
+      if (fileToProcess.type === 'application/pdf') {
+        console.log('Processando PDF:', fileToProcess.name);
+        extractedData = await TicketExtractorService.extractFromPDF(fileToProcess);
+      } else if (fileToProcess.type.startsWith('image/')) {
+        console.log('Processando imagem:', fileToProcess.name);
+        extractedData = await TicketExtractorService.extractFromImage(fileToProcess);
+      } else {
+        throw new Error('Tipo de arquivo não suportado');
+      }
+      
+      // Converter para formato do formData
+      const convertedData = TicketExtractorService.convertToFormData(extractedData);
+      
+      console.log('=== DEBUG EXTRAÇÃO ===');
+      console.log('Dados extraídos:', extractedData);
+      console.log('Convertido para formData:', convertedData);
+      console.log('FormData anterior:', formData);
+      
+      // Atualizar formulário com dados extraídos
+      setFormData(prev => {
+        const newFormData = {
+          ...prev,
+          ...convertedData
+        };
+        console.log('Novo formData:', newFormData);
+        return newFormData;
+      });
+      
+      // Configurar níveis de confiança
+      const confidence = extractedData.confidence || {};
+      const fieldConfidence: Record<string, 'high' | 'medium' | 'low'> = {};
+      
+      Object.entries(confidence).forEach(([field, value]) => {
+        const numValue = typeof value === 'number' ? value : 0;
+        if (numValue >= 0.8) fieldConfidence[field] = 'high';
+        else if (numValue >= 0.6) fieldConfidence[field] = 'medium';
+        else fieldConfidence[field] = 'low';
+      });
+      
+      setFieldConfidence(fieldConfidence);
+      
+      // Iniciar análise automática com IA
+      if (convertedData && Object.keys(convertedData).length > 0) {
+        console.log('🤖 Iniciando análise automática com IA...');
+        setIsAnalyzing(true);
+        
+        try {
+          const analysis = await analyzeTrafficFine(convertedData);
+          console.log('✅ Análise automática concluída:', analysis);
+          
+          // Salvar análise no formData
+          setFormData(prev => ({
+            ...prev,
+            analysis: analysis
+          }));
+          
+          toast.success('Análise automática concluída!', {
+            description: 'IA analisou os dados extraídos da multa.'
+          });
+          
+        } catch (error) {
+          console.error('❌ Erro na análise automática:', error);
+          toast.error('Erro na análise automática', {
+            description: 'Não foi possível analisar automaticamente.'
+          });
+        } finally {
+          setIsAnalyzing(false);
+        }
+      }
+      
+      // Mostrar toast com resultado da extração
+      const overallConfidence = TicketExtractorService.getOverallConfidence(confidence);
+      const extractedFields = Object.keys(convertedData).filter(key => convertedData[key as keyof typeof convertedData]).length;
+      
+      if (overallConfidence === 'high' && extractedFields >= 3) {
+        toast.success('Dados extraídos com sucesso!', {
+          description: `${extractedFields} campos preenchidos automaticamente.`
+        });
+      } else if (extractedFields > 0) {
+        toast.info('Extração parcial concluída', {
+          description: `${extractedFields} campos preenchidos. Verifique os dados.`
+        });
+      } else {
+        toast.warning('Não foi possível extrair dados', {
+          description: 'Preencha o formulário manualmente.'
+        });
+      }
+      
+    } catch (error) {
+      console.error('Erro na extração:', error);
+      toast.error('Erro ao processar arquivo', {
+        description: 'Tente novamente ou preencha manualmente.'
+      });
+      
+      // Limpar campos para preenchimento manual
+      setFieldConfidence({});
+    } finally {
+      setIsExtracting(false);
+      setIsAnalyzing(false);
+      setCurrentStep(2);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -200,14 +323,27 @@ export default function NewLeadModal({ isOpen, onClose }: NewLeadModalProps) {
         user_id: authUser.id
       });
 
+      // Classificar lead automaticamente baseado na análise
+      let leadStatus = 'novo'; // Status padrão
+      if (formData.analysis && formData.analysis.probabilidade_sucesso) {
+        if (formData.analysis.probabilidade_sucesso > 70) {
+          leadStatus = 'quente'; // Alta probabilidade de sucesso
+        } else if (formData.analysis.probabilidade_sucesso > 40) {
+          leadStatus = 'morno'; // Média probabilidade de sucesso
+        } else {
+          leadStatus = 'frio'; // Baixa probabilidade de sucesso
+        }
+      }
+
       // Inserir lead na tabela 'leads' do Supabase
       const { data, error } = await supabase
         .from('leads')
         .insert({
           name: nome,
           phone: telefone,
-          status: 'novo', // Status inicial
+          status: leadStatus, // Status classificado automaticamente
           user_id: authUser.id, // Usar authUser.id em vez de user.id
+          analysis: formData.analysis // Salvar análise junto
         })
         .select()
         .single();
@@ -341,7 +477,52 @@ export default function NewLeadModal({ isOpen, onClose }: NewLeadModalProps) {
                       accept=".pdf,.jpg,.jpeg,.png"
                     />
                     <div 
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => {
+                        console.log('Botão de upload clicado');
+                        console.log('fileInputRef.current:', fileInputRef.current);
+                        fileInputRef.current?.click();
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('Arquivo arrastado sobre a área');
+                      }}
+                      onDragLeave={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('Arquivo solto na área', e.dataTransfer.files);
+                        
+                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                          const droppedFile = e.dataTransfer.files[0];
+                          console.log('Arquivo via drag and drop:', droppedFile.name, droppedFile.type);
+                          
+                          // Validar tipo
+                          const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+                          if (validTypes.includes(droppedFile.type)) {
+                            setFile(droppedFile);
+                            
+                            // Criar preview se for imagem
+                            if (droppedFile.type.startsWith('image/')) {
+                              const url = URL.createObjectURL(droppedFile);
+                              setPreviewUrl(url);
+                              console.log('Preview de imagem criado via drag and drop');
+                            } else {
+                              setPreviewUrl(null);
+                              console.log('Arquivo PDF detectado via drag and drop');
+                            }
+                            
+                            startExtraction(droppedFile);
+                          } else {
+                            toast.error('Tipo de arquivo inválido', {
+                              description: 'Apenas PDF, JPG e PNG são aceitos.'
+                            });
+                          }
+                        }
+                      }}
                       className="border-2 border-dashed border-surface-container-highest rounded-[32px] p-20 flex flex-col items-center justify-center bg-surface/40 hover:bg-primary-container/5 hover:border-primary-container/40 transition-all cursor-pointer group"
                     >
                       <div className="w-20 h-20 rounded-[28px] bg-surface-container-highest/50 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-primary-container/10 group-hover:text-primary-container transition-all shadow-xl">

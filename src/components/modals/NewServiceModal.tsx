@@ -10,8 +10,8 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '@/src/lib/utils';
-import { Service, useCases } from '@/src/contexts/CaseContext';
+import { cn } from '@/lib/utils';
+import { Service, useCases } from '@/contexts/CaseContext';
 
 interface NewServiceModalProps {
   isOpen: boolean;

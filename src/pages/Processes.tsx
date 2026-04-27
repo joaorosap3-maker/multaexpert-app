@@ -19,7 +19,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { cn } from '@/src/lib/utils';
+import { cn } from '@/lib/utils';
 import ProcessViewModal from '../components/modals/ProcessViewModal';
 import ProcessEditModal from '../components/modals/ProcessEditModal';
 import { useCases } from '../contexts/CaseContext';

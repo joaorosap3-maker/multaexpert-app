@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Bell, Check, Clock, Info, ShieldAlert } from 'lucide-react';
-import { cn } from '@/src/lib/utils';
+import { cn } from '@/lib/utils';
 
 interface Notification {
   id: string;

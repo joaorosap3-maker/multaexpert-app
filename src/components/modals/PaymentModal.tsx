@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, CreditCard, DollarSign, FileText, CheckCircle2, Link, MessageCircle, ArrowRight } from 'lucide-react';
-import { cn } from '@/src/lib/utils';
-import { WHITE_LABEL } from '@/src/constants';
+import { cn } from '@/lib/utils';
+import { WHITE_LABEL } from '@/constants';
 import { toast } from 'sonner';
 
 interface PaymentModalProps {

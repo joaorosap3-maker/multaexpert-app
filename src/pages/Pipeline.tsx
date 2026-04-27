@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { supabase } from '@/src/lib/supabaseClient';
-import { useAuth } from '@/src/context/AuthContext';
+import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/context/AuthContext';
 import {
   DragDropContext,
   Droppable,

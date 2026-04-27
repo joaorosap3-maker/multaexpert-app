@@ -12,7 +12,7 @@ import {
   Filter as FilterIcon
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { cn } from '@/src/lib/utils';
+import { cn } from '@/lib/utils';
 import { useCases, Service } from '../contexts/CaseContext';
 import ServiceDetailModal from '../components/modals/ServiceDetailModal';
 import NewServiceModal from '../components/modals/NewServiceModal';

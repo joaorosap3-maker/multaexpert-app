@@ -10,8 +10,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useCases, Case } from '@/src/contexts/CaseContext';
-import { cn } from '@/src/lib/utils';
+import { useCases, Case } from '@/contexts/CaseContext';
+import { cn } from '@/lib/utils';
 
 interface ProcessEditModalProps {
   isOpen: boolean;

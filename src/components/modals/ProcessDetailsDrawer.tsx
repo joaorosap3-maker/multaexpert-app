@@ -30,26 +30,42 @@ import {
   MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '@/src/lib/utils';
-import { useCases, HistoryItem, Case, CaseDocument, Billing, GenerationEntry } from '@/src/contexts/CaseContext';
-import { useKnowledge } from '@/src/contexts/KnowledgeContext';
-import { useLearning } from '@/src/contexts/LearningContext';
-import { WHITE_LABEL } from '@/src/constants';
+import { cn } from '@/lib/utils';
+import { useCases, HistoryItem, Case, CaseDocument, Billing, GenerationEntry } from '@/contexts/CaseContext';
+import { useKnowledge } from '@/contexts/KnowledgeContext';
+import { useLearning } from '@/contexts/LearningContext';
+import { WHITE_LABEL } from '@/constants';
 import { toast } from 'sonner';
 import PaymentModal from './PaymentModal';
 import DocumentEditorModal from './DocumentEditorModal';
 import AIAnalysisModal from './AIAnalysisModal';
-import { analyzeInfraction, AnalysisResult } from '@/src/services/aiAnalyseService';
-import { generateDefenseTemplate } from '@/src/services/defenseGenerator';
-import { recordOutcome } from '@/src/services/learningService';
-import { initialNulidades } from '@/src/services/nulidadeData';
-import { analyzeLead, LeadAnalysisResult, formatCurrency, getGravityColor } from '@/src/services/leadAnalysisService';
+import { 
+  analyzeTrafficFine, 
+  AnalysisResult, 
+  AnalysisRecommendation, 
+  formatCurrency, 
+  getGravityColor 
+} from "@/services/aiAnalysisService";
+import { generateDefenseTemplate } from '@/services/defenseGenerator';
+import { recordOutcome } from '@/services/learningService';
+import { initialNulidades } from '@/services/nulidadeData';
 
 interface ProcessDetailsDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   lead: any | null;
   onAnalyze?: (lead: any) => Promise<void>;
+}
+
+interface AnalysisModalResult {
+  score: number;
+  summary: string;
+  recommendations: {
+    id: string;
+    tese: string;
+    probability: number;
+    description: string;
+  }[];
 }
 
 export default function ProcessDetailsDrawer({ isOpen, onClose, lead, onAnalyze }: ProcessDetailsDrawerProps) {
@@ -108,6 +124,9 @@ export default function ProcessDetailsDrawer({ isOpen, onClose, lead, onAnalyze 
   const [selectedConclusionThesis, setSelectedConclusionThesis] = useState<string>('');
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
+
+// Verificar se já existe análise salva
+const hasExistingAnalysis = leadAnalysis && Object.keys(leadAnalysis).length > 0;
   const [generatedDefenseContent, setGeneratedDefenseContent] = useState('');
   const [selectedGeneration, setSelectedGeneration] = useState<GenerationEntry | null>(null);
   const [isGenModalOpen, setIsGenModalOpen] = useState(false);
@@ -209,106 +228,181 @@ if (!lead && isOpen) return null;
 
   
   const handleAnalyzeLead = async (leadToAnalyze: any) => {
-  if (!leadToAnalyze) return;
+    if (!leadToAnalyze) return;
 
-  try {
-    console.log('🚀 ProcessDetailsDrawer: Iniciando análise:', leadToAnalyze);
+    try {
+      console.log('🚀 ProcessDetailsDrawer: Iniciando análise com IA real:', leadToAnalyze);
+      
+      // Verificar se já existe análise salva
+      if (hasExistingAnalysis) {
+        console.log('📋 Análise já existe, exibindo análise salva:', leadAnalysis);
+        
+        // Abrir modal com análise existente
+        const existingAnalysisResult: AnalysisModalResult = {
+          score: Math.round(leadAnalysis.probabilidade_sucesso * 100),
+          summary: leadAnalysis.insights.join(' '),
+          recommendations: leadAnalysis.acoes_recomendadas.map((acao, index) => ({
+            id: (index + 1).toString(),
+            tese: acao,
+            probability: Math.round(leadAnalysis.probabilidade_sucesso * 100),
+            description: acao
+          }))
+        };
 
-    const result = await analyzeLead(leadToAnalyze);
+        setIsAnalysisModalOpen(true);
+        setAnalysisResult(existingAnalysisResult);
+        
+        toast.success('Análise carregada', {
+          description: 'Exibindo análise salva anteriormente.'
+        });
+        return;
+      }
+      
+      // Chamar serviço real de IA
+      const result = await analyzeTrafficFine(leadToAnalyze);
 
-    console.log('✅ ProcessDetailsDrawer: Resultado final:', result);
+      console.log('✅ ProcessDetailsDrawer: Resultado da IA:', result);
 
-    // Criar análise no formato esperado pelo AIAnalysisModal
-    const analysisResult = {
-      score: 85, // Mock score
-      summary: result.resumo,
-      recommendations: [
-        {
-          id: '1',
-          tese: result.recomendacao,
-          probability: 85,
-          description: result.resumo
-        }
-      ]
-    };
+      if (!result) {
+        toast.error('Erro na análise', {
+          description: 'A IA não conseguiu analisar esta multa. Tente novamente.'
+        });
+        return;
+      }
 
-    // Abrir modal de análise
-    setIsAnalysisModalOpen(true);
-    setAnalysisResult(analysisResult);
+      // Criar análise no formato esperado pelo AIAnalysisModal
+      const analysisResult: AnalysisModalResult = {
+        score: Math.round(result.probabilidade_sucesso * 100),
+        summary: result.insights.join(' '),
+        recommendations: result.acoes_recomendadas.map((acao, index) => ({
+          id: (index + 1).toString(),
+          tese: acao,
+          probability: Math.round(result.probabilidade_sucesso * 100),
+          description: acao
+        }))
+      };
 
-    // Adicionar ao histórico
-    const newHistoryItem: HistoryItem = {
-      id: Math.random().toString(36).substr(2, 9),
-      date: new Date().toLocaleString('pt-BR'),
-      action: 'Análise de IA concluída',
-      description: `Análise inteligente gerada com sucesso.`
-    };
+      console.log('📊 Análise formatada para modal:', analysisResult);
 
-    updateCase(leadToAnalyze.id, { 
-      history: [newHistoryItem, ...(caseData?.history || [])]
-    });
+      // Abrir modal de análise
+      setIsAnalysisModalOpen(true);
+      setAnalysisResult(analysisResult);
 
-    setLoadingAction(null);
-    setSuccessAction('ai');
-    setTimeout(() => setSuccessAction(null), 2000);
+      // Adicionar ao histórico
+      const newHistoryItem: HistoryItem = {
+        id: Math.random().toString(36).substr(2, 9),
+        date: new Date().toLocaleString('pt-BR'),
+        action: 'Análise de IA concluída',
+        description: `Análise inteligente gerada com ${result.probabilidade_sucesso > 0.7 ? 'alta' : 'média'} confiança.`
+      };
 
-  } catch (error) {
-    console.error('❌ ProcessDetailsDrawer: Erro na análise:', error);
-    toast.error('Erro ao analisar a multa. Tente novamente.');
-    setLoadingAction(null);
-  }
-};
+      updateCase(leadToAnalyze.id, { 
+        history: [newHistoryItem, ...(caseData?.history || [])]
+      });
 
-const handleAction = async (id: string) => {
+      toast.success('Análise concluída', {
+        description: 'IA analisou a multa com sucesso.'
+      });
+
+    } catch (error) {
+      console.error('❌ Erro na análise:', error);
+      toast.error('Erro na análise', {
+        description: 'Não foi possível analisar este processo.'
+      });
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleAction = async (id: string) => {
     switch(id) {
       case 'ai': 
         if (!caseData) return;
         setLoadingAction('ai');
+      
+      try {
+        console.log('🚀 ProcessDetailsDrawer: Iniciando análise com IA real:', caseData);
         
-        try {
-          const learnings = getRelevantLearnings(caseData.infractionType, 'DETRAN');
+        // Verificar se já existe análise salva
+        if (hasExistingAnalysis) {
+          console.log('📋 Análise já existe, exibindo análise salva:', leadAnalysis);
           
-          const result = await analyzeInfraction({
-            plate: caseData.plate,
-            organ: 'DETRAN', 
-            infraction: caseData.infractionDescription || caseData.infractionType,
-            date: caseData.infractionDate,
-            location: caseData.address || 'Brasília-DF',
-            type: caseData.infractionType,
-            knowledgeDocs: knowledgeDocs,
-            learnings: learnings
-          });
-          
-          // Análise será adicionada ao lead via setSelectedLead no Pipeline
-          
-          const newHistoryItem: HistoryItem = {
-            id: Math.random().toString(36).substr(2, 9),
-            date: new Date().toLocaleString('pt-BR'),
-            action: 'Análise de IA concluída',
-            description: `A IA identificou ${result.recommendations.length} teses com até ${result.score}% de probabilidade de deferimento.`
+          // Abrir modal com análise existente
+          const existingAnalysisResult: AnalysisModalResult = {
+            score: Math.round(leadAnalysis.probabilidade_sucesso * 100),
+            summary: leadAnalysis.insights.join(' '),
+            recommendations: leadAnalysis.acoes_recomendadas.map((acao, index) => ({
+              id: (index + 1).toString(),
+              tese: acao,
+              probability: Math.round(leadAnalysis.probabilidade_sucesso * 100),
+              description: acao
+            }))
           };
 
-          updateCase(lead.id, { 
-            status: 'Em Análise', 
-            column: 'analysis',
-            history: [newHistoryItem, ...(caseData.history || [])]
+          setIsAnalysisModalOpen(true);
+          setAnalysisResult(existingAnalysisResult);
+          
+          toast.success('Análise carregada', {
+            description: 'Exibindo análise salva anteriormente.'
           });
-
-          setLoadingAction(null);
-          setSuccessAction('ai');
-          setTimeout(() => {
-            setSuccessAction(null);
-            setIsAnalysisModalOpen(true);
-          }, 800);
-        } catch (error) {
-          toast.error('Erro na análise de IA');
-          setLoadingAction(null);
+          return;
         }
-        break;
-      case 'contract':
-        setCurrentDocType('Contrato');
-        setIsDocEditorOpen(true);
-        break;
+        
+        // Chamar serviço real de IA
+        const result = await analyzeTrafficFine(caseData);
+
+        console.log('✅ ProcessDetailsDrawer: Resultado da IA:', result);
+
+        if (!result) {
+          toast.error('Erro na análise', {
+            description: 'A IA não conseguiu analisar esta multa. Tente novamente.'
+          });
+          return;
+        }
+
+        // Criar análise no formato esperado pelo AIAnalysisModal
+        const analysisResult: AnalysisModalResult = {
+          score: Math.round(result.probabilidade_sucesso * 100),
+          summary: result.insights.join(' '),
+          recommendations: result.acoes_recomendadas.map((acao, index) => ({
+            id: (index + 1).toString(),
+            tese: acao,
+            probability: Math.round(result.probabilidade_sucesso * 100),
+            description: acao
+          }))
+        };
+
+        console.log('📊 Análise formatada para modal:', analysisResult);
+
+        // Abrir modal de análise
+        setIsAnalysisModalOpen(true);
+        setAnalysisResult(analysisResult);
+
+        // Adicionar ao histórico
+        const newHistoryItem: HistoryItem = {
+          id: Math.random().toString(36).substr(2, 9),
+          date: new Date().toLocaleString('pt-BR'),
+          action: 'Análise de IA concluída',
+          description: `Análise inteligente gerada com ${result.probabilidade_sucesso > 0.7 ? 'alta' : 'média'} confiança.`
+        };
+
+        updateCase(caseData.id, { 
+          history: [newHistoryItem, ...(caseData?.history || [])]
+        });
+
+        toast.success('Análise concluída', {
+          description: 'IA analisou a multa com sucesso.'
+        });
+
+      } catch (error) {
+        console.error('❌ Erro na análise:', error);
+        toast.error('Erro na análise', {
+          description: 'Não foi possível analisar este processo.'
+        });
+      } finally {
+        setLoadingAction(null);
+      }
+      break;
       case 'payment':
         setIsPaymentModalOpen(true);
         break;
@@ -387,7 +481,7 @@ const handleAction = async (id: string) => {
     
     // Record in learning service if a thesis was applied
     if (caseData.appliedThesisId) {
-      import('@/src/services/learningService').then(service => {
+      import('@/services/learningService').then(service => {
         service.recordOutcome(caseData.appliedThesisId!, outcome);
       });
     }

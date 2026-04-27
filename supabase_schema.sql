@@ -88,7 +88,7 @@ CREATE TABLE leads (
   outcome VARCHAR(20), -- deferred, denied
   
   -- Análise IA
-  analysis JSONB, -- Resultado da análise da IA
+  analysis JSONB, -- Resultado da análise da IA (já existe na linha 91)
   
   -- Metadados
   source VARCHAR(50) DEFAULT 'manual', -- manual, import, api

@@ -16,9 +16,9 @@ import {
   Loader2,
   FileCheck
 } from 'lucide-react';
-import { cn } from '@/src/lib/utils';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { WHITE_LABEL } from '@/src/constants';
+import { WHITE_LABEL } from '@/constants';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 

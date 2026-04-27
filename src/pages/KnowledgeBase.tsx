@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useKnowledge, KnowledgeDocument } from '@/contexts/KnowledgeContext';
 import { 
   BookOpen, 
   Upload, 
@@ -16,8 +17,7 @@ import {
   FileStack
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '@/src/lib/utils';
-import { useKnowledge, KnowledgeDocument } from '@/src/contexts/KnowledgeContext';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export default function KnowledgeBase() {

@@ -21,8 +21,8 @@ import {
   Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '@/src/lib/utils';
-import { useCases, HistoryItem } from '@/src/contexts/CaseContext';
+import { cn } from '@/lib/utils';
+import { useCases, HistoryItem } from '@/contexts/CaseContext';
 
 interface CaseDetailModalProps {
   isOpen: boolean;

@@ -15,8 +15,8 @@ import {
   Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '@/src/lib/utils';
-import { Service, Case, useCases } from '@/src/contexts/CaseContext';
+import { cn } from '@/lib/utils';
+import { Service, Case, useCases } from '@/contexts/CaseContext';
 
 interface ServiceDetailModalProps {
   isOpen: boolean;

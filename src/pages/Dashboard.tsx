@@ -26,7 +26,7 @@ import {
   Cell
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '@/src/lib/utils';
+import { cn } from '@/lib/utils';
 
 const stats = [
   { name: 'Total de Leads', value: '142', change: '+12.5%', color: 'blue', icon: Users },

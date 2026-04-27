@@ -1,5 +1,5 @@
 // Supabase Service - Integração completa com o backend
-import { supabase } from '@/src/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 
 // Types baseados no schema
 export interface Company {
